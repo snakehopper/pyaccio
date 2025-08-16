@@ -1,0 +1,8 @@
+# Bybit API Credentials
+# Important: Use a Master Key with full permissions for this script to work.
+BYBIT_API_KEY="YOUR_BYBIT_API_KEY"
+BYBIT_API_SECRET="YOUR_BYBIT_API_SECRET"
+
+# Whitelisted Withdrawal Address
+# This address MUST be whitelisted in your Bybit account for ERC20 (ETH) network.
+WITHDRAWAL_WALLET_ADDRESS="YOUR_WHITELISTED_ERC20_WALLET_ADDRESS"
