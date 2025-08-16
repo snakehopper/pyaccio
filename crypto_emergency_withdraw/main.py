@@ -17,6 +17,7 @@ This script performs the following actions in sequence:
 import os
 import logging
 import time
+import argparse
 from dotenv import load_dotenv
 from bybit_client import BybitClient
 
@@ -74,22 +75,22 @@ def liquidate_positions(client: BybitClient):
     """
     logging.info("--- Starting Liquidation Process ---")
 
-    # 1. Close Perpetual Positions (Linear/USDT-settled)
-    # TODO: Also handle 'inverse' positions if necessary.
-    logging.info("Checking for open 'linear' (USDT-margined) perpetual positions...")
-    linear_positions = client.get_positions(category='linear')
-    for pos in linear_positions:
-        if float(pos.get('size', 0)) > 0:
-            side = "Sell" if pos['side'] == "Buy" else "Buy"
-            logging.info(f"Closing {pos['side']} position of {pos['size']} {pos['symbol']}...")
-            client.place_order(
-                category='linear',
-                symbol=pos['symbol'],
-                side=side,
-                order_type='Market',
-                qty=pos['size']
-            )
-            time.sleep(1) # Small delay between orders
+    # 1. Close all Perpetual Positions
+    for category in ['linear', 'inverse']:
+        logging.info(f"Checking for open '{category}' perpetual positions...")
+        positions = client.get_positions(category=category)
+        for pos in positions:
+            if float(pos.get('size', 0)) > 0:
+                side = "Sell" if pos['side'] == "Buy" else "Buy"
+                logging.info(f"Closing {pos['side']} position of {pos['size']} {pos['symbol']}...")
+                client.place_order(
+                    category=category,
+                    symbol=pos['symbol'],
+                    side=side,
+                    order_type='Market',
+                    qty=pos['size']
+                )
+                time.sleep(1)  # Small delay between orders
 
     # 2. Sell all Spot assets to USDT
     logging.info("Checking for spot assets to sell to USDT...")
@@ -99,7 +100,8 @@ def liquidate_positions(client: BybitClient):
         for asset in spot_balances:
             coin = asset.get('coin')
             balance = float(asset.get('walletBalance', 0))
-            if coin not in ['USDT', 'USDC'] and balance > 0:
+            if coin not in ['USDT'] and balance > 0:
+                # Construct symbol, for USDC it's USDCUSDT, for others like BTC it's BTCUSDT
                 symbol = f"{coin}USDT"
                 logging.info(f"Selling {balance} of {coin} via market order ({symbol})...")
                 client.place_order(
@@ -150,9 +152,21 @@ def execute_withdrawal(client: BybitClient, wallet_address: str):
 
 def main():
     """Main execution function."""
+    parser = argparse.ArgumentParser(description="Crypto Emergency Withdrawal Script for Bybit.")
+    parser.add_argument(
+        '--dry-run',
+        action='store_true',
+        help='Run pre-flight checks without executing any trades or withdrawals.'
+    )
+    args = parser.parse_args()
+
     logging.info("=============================================")
     logging.info("=== Starting Crypto Emergency Withdrawal ===")
     logging.info("=============================================")
+
+    if args.dry_run:
+        logging.info("*** DRY-RUN MODE ACTIVATED ***")
+        logging.info("The script will only perform checks and will not execute any real operations.")
 
     load_dotenv()
     api_key = os.getenv("BYBIT_API_KEY")
@@ -166,8 +180,14 @@ def main():
     try:
         client = BybitClient(api_key=api_key, api_secret=api_secret)
 
+        # Run pre-flight checks
         if not run_pre_flight_checks(client, wallet_address):
             logging.error("Pre-flight checks failed. Aborting.")
+            return
+
+        # If dry-run, stop here
+        if args.dry_run:
+            logging.info("*** DRY-RUN COMPLETED SUCCESSFULLY ***")
             return
 
         # For maximum security, delete all other API keys except the current one.

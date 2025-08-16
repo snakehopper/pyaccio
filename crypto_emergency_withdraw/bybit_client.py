@@ -148,12 +148,12 @@ class BybitClient:
 
     def delete_other_api_keys(self, current_api_key: str):
         """
-        Deletes all API keys except the one currently in use.
-        This is a critical security step.
+        Deletes all API keys with trade permissions except the current one.
+        This is a critical security step. Read-only keys are preserved.
         Endpoint: /v5/user/delete-api
         """
         try:
-            self.logger.info("Fetching all API keys to delete others...")
+            self.logger.info("Fetching all API keys to find and delete those with trade permissions...")
             all_keys_response = self.session.get_api_key_information()
             if all_keys_response.get('retCode') != 0:
                 self.logger.error("Could not fetch API keys to delete.")
@@ -163,8 +163,13 @@ class BybitClient:
             success = True
             for key_info in all_keys:
                 api_key_to_check = key_info.get('apiKey')
-                if api_key_to_check != current_api_key:
-                    self.logger.warning(f"Deleting API key: {api_key_to_check}")
+                if api_key_to_check == current_api_key:
+                    continue
+
+                permissions = key_info.get('permissions', {})
+                # A key has trade permissions if the 'Trade' list is not empty.
+                if permissions.get('Trade'):
+                    self.logger.warning(f"Deleting API key with trade permissions: {api_key_to_check}")
                     delete_response = self.session._post(
                         "/v5/user/delete-api",
                         {"apiKey": api_key_to_check}
@@ -172,6 +177,8 @@ class BybitClient:
                     if delete_response.get('retCode') != 0:
                         self.logger.error(f"Failed to delete API key {api_key_to_check}: {delete_response.get('retMsg')}")
                         success = False
+                else:
+                    self.logger.info(f"Skipping deletion of read-only API key: {api_key_to_check}")
             return success
         except Exception as e:
             self.logger.error(f"An exception occurred while deleting API keys: {e}")
