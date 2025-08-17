@@ -183,3 +183,74 @@ class BybitClient:
         except Exception as e:
             self.logger.error(f"An exception occurred while deleting API keys: {e}")
             return False
+
+    # --- Subaccount Management Methods ---
+
+    def get_subaccount_list(self):
+        """
+        Retrieves the list of all sub-accounts.
+        Endpoint: /v5/user/query-sub-members
+        """
+        try:
+            self.logger.info("Fetching sub-account list...")
+            result = self.session._get("/v5/user/query-sub-members", {})
+            self.logger.debug(f"Sub-account list response: {result}")
+            return result.get('result', {}).get('subMembers', [])
+        except Exception as e:
+            self.logger.error(f"Error fetching sub-account list: {e}")
+            return []
+
+    def create_subaccount_api_key(self, sub_uid: str, read_only: int, permissions: dict):
+        """
+        Creates an API key for a specific sub-account.
+        Endpoint: /v5/user/create-sub-api
+        """
+        try:
+            self.logger.info(f"Creating API key for sub-account UID: {sub_uid}...")
+            params = {
+                "subuid": sub_uid,
+                "readOnly": read_only,
+                "permissions": permissions
+            }
+            result = self.session._post("/v5/user/create-sub-api", params)
+            self.logger.debug(f"Create API key response: {result}")
+            return result.get('result', {})
+        except Exception as e:
+            self.logger.error(f"Error creating sub-account API key: {e}")
+            return {}
+
+    def delete_subaccount_api_key(self, api_key: str):
+        """
+        Deletes a sub-account's API key.
+        Endpoint: /v5/user/delete-sub-api
+        """
+        try:
+            self.logger.info(f"Deleting sub-account API key: {api_key[:5]}...")
+            result = self.session._post("/v5/user/delete-sub-api", {"apiKey": api_key})
+            self.logger.debug(f"Delete API key response: {result}")
+            return result
+        except Exception as e:
+            self.logger.error(f"Error deleting sub-account API key: {e}")
+            return None
+
+    def transfer_funds(self, transfer_id: str, coin: str, amount: str, from_member_id: int, to_member_id: int):
+        """
+        Transfers funds between main and sub-accounts.
+        Endpoint: /v5/asset/transfer/inter-transfer
+        """
+        try:
+            self.logger.info(f"Transferring {amount} {coin} from {from_member_id} to {to_member_id}...")
+            params = {
+                "transferId": transfer_id,
+                "coin": coin,
+                "amount": amount,
+                "fromMemberId": from_member_id,
+                "toMemberId": to_member_id,
+                "type": "IN" # Transfer into the main account from sub-account
+            }
+            result = self.session._post("/v5/asset/transfer/inter-transfer", params)
+            self.logger.debug(f"Fund transfer response: {result}")
+            return result
+        except Exception as e:
+            self.logger.error(f"Error transferring funds: {e}")
+            return None
